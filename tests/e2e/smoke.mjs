@@ -47,6 +47,13 @@ const ROUTES = [
 // features: expected noise here rather than a regression, so it is not counted.
 const IGNORED_ERRORS = [/License is not valid for this domain/i];
 
+// GitHub Pages has no server-side routing, so a deep link is served 404.html, which stores the path
+// and hands over to the app: the 404 is how that works rather than something being missing. Only
+// ignored when the run targets the deployed demo, so a real 404 against the dev server still fails.
+if (/github\.io/i.test(BASE)) {
+  IGNORED_ERRORS.push(/Failed to load resource: the server responded with a status of 404/i);
+}
+
 const isRealError = (text) => !IGNORED_ERRORS.some((pattern) => pattern.test(text));
 
 const failures = [];
