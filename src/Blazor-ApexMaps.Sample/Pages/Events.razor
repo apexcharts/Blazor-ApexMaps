@@ -1,0 +1,121 @@
+@page "/events"
+
+<PageTitle>Events - Blazor-ApexMaps</PageTitle>
+
+<h1>Events</h1>
+
+<p class="lead">
+    All 17 core events, as <code>EventCallback</code> parameters. Hover, click, drag, zoom and
+    select the map below and watch the log.
+</p>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="hover" checked="@_logHover"
+               @onchange="e => _logHover = (bool?)e.Value ?? false" />
+        <label class="form-check-label" for="hover">Log hover (noisy)</label>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _log.Clear()">Clear</button>
+</div>
+
+<div class="demo-grid">
+    <div class="demo-card">
+        <ApexMaps Options="_options" Height="420"
+                  OnRendered="OnRendered"
+                  OnUpdated="OnUpdated"
+                  OnResized="OnResized"
+                  OnFeatureClick="OnFeatureClick"
+                  OnFeatureHover="OnFeatureHover"
+                  OnFeatureFocus="OnFeatureFocus"
+                  OnMarkClick="OnMarkClick"
+                  OnMarkHover="OnMarkHover"
+                  OnClusterClick="OnClusterClick"
+                  OnDrilldown="OnDrilldown"
+                  OnDrillup="OnDrillup"
+                  OnSelectionChange="OnSelectionChange"
+                  OnLegendToggle="OnLegendToggle"
+                  OnZoom="OnZoom"
+                  OnPanEnd="OnPanEnd"
+                  OnRotate="OnRotate"
+                  OnRotateEnd="OnRotateEnd" />
+    </div>
+    <div class="demo-card">
+        <h2 class="h6">Event log</h2>
+        <ul class="event-log">
+            @foreach (var line in _log)
+            {
+                <li><code>@line</code></li>
+            }
+        </ul>
+    </div>
+</div>
+
+<p class="text-muted small">
+    Payloads arrive as plain data: the key, the name, the value, the geometry properties, and the
+    row behind the mark. The row is whatever shape you supplied, so it arrives as a
+    <code>JsonElement</code> and <code>Read&lt;T&gt;()</code> turns it back into your own model.
+    The core's own payloads also carry the map instance, which is circular and cannot cross the
+    interop boundary, so the bridge drops it: in Blazor the component is the handle.
+</p>
+
+@code {
+    private readonly List<string> _log = [];
+    private bool _logHover;
+
+    private readonly MapsOptions _options = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+                Scale = new ScaleOptions { Palette = Palettes.Blues },
+            },
+            new BubbleSeries
+            {
+                Name = "Metro population (millions)",
+                Data = SampleData.MetroPopulations,
+                Size = new SizeOptions { Range = [3, 20] },
+                Color = "#f97316",
+            },
+        ],
+        Legend = new LegendOptions { Position = LegendPosition.Bottom, Interactive = true },
+        Interaction = new InteractionOptions
+        {
+            Selection = new SelectionOptions { Enabled = true, Multiple = true },
+        },
+    };
+
+    private void OnRendered() => Log("rendered");
+    private void OnUpdated() => Log("updated");
+    private void OnResized(ResizeEventArgs e) => Log($"resized: {e.Width:0} x {e.Height:0}");
+    private void OnFeatureClick(FeatureEventArgs e) => Log($"featureClick: {e.Key} ({e.Name}) = {e.Value?.ToString() ?? "no data"}");
+    private void OnFeatureHover(FeatureEventArgs e) => LogHover($"featureHover: {e.Key}");
+    private void OnFeatureFocus(FeatureEventArgs e) => Log($"featureFocus: {e.Key}");
+    private void OnMarkClick(FeatureEventArgs e) => Log($"markClick: {e.Name} = {e.Value}");
+    private void OnMarkHover(FeatureEventArgs e) => LogHover($"markHover: {e.Name}");
+    private void OnClusterClick(FeatureEventArgs e) => Log($"clusterClick: {e.Key}");
+    private void OnDrilldown(DrilldownEventArgs e) => Log($"drilldown: {e.Key} -> {e.To}");
+    private void OnDrillup(DrillupEventArgs e) => Log($"drillup: depth {e.Depth}");
+    private void OnSelectionChange(SelectionChangeEventArgs e) => Log($"selectionChange: [{string.Join(", ", e.Ids)}] via {e.Source}");
+    private void OnLegendToggle(LegendToggleEventArgs e) => Log($"legendToggle: class {e.ClassIndex}");
+    private void OnZoom(ZoomEventArgs e) => Log($"zoom: {e.K:0.##}");
+    private void OnPanEnd() => Log("panEnd");
+    private void OnRotate(RotateEventArgs e) => LogHover($"rotate: {e.Rotate.FirstOrDefault():0.#}");
+    private void OnRotateEnd(RotateEventArgs e) => Log($"rotateEnd: {e.Rotate.FirstOrDefault():0.#}");
+
+    private void Log(string line)
+    {
+        _log.Insert(0, $"{DateTime.Now:HH:mm:ss.f}  {line}");
+        if (_log.Count > 40) _log.RemoveAt(_log.Count - 1);
+        StateHasChanged();
+    }
+
+    private void LogHover(string line)
+    {
+        if (_logHover) Log(line);
+    }
+}

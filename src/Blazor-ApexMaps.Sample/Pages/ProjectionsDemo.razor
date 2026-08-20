@@ -1,0 +1,150 @@
+@page "/projections"
+
+<PageTitle>Projections &amp; globe - Blazor-ApexMaps</PageTitle>
+
+<h1>Projections &amp; globe</h1>
+
+<p class="lead">
+    Thirteen projections, spec objects with rotation and standard parallels, and a sphere that
+    spins under the drag instead of panning.
+</p>
+
+<div class="demo-toolbar">
+    <label>
+        Projection
+        <select class="form-select form-select-sm" value="@_projection"
+                @onchange="e => Set(() => _projection = e.Value?.ToString() ?? Projections.EqualEarth)">
+            @foreach (var (name, label) in _projections)
+            {
+                <option value="@name">@label</option>
+            }
+        </select>
+    </label>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="graticule" checked="@_graticule"
+               @onchange="e => Set(() => _graticule = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="graticule">Graticule</label>
+    </div>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="sphere" checked="@_sphere"
+               @onchange="e => Set(() => _sphere = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="sphere">Sphere</label>
+    </div>
+    <div class="btn-group btn-group-sm" role="group">
+        <button class="btn btn-outline-secondary" @onclick="() => Spin(-30)">Spin west</button>
+        <button class="btn btn-outline-secondary" @onclick="() => Spin(30)">Spin east</button>
+        <button class="btn btn-outline-secondary" @onclick="ShowRotation">Read rotation</button>
+    </div>
+</div>
+
+<div class="demo-card">
+    <ApexMaps @ref="_map" Options="_options" Height="500" />
+</div>
+
+@if (_rotationText is not null)
+{
+    <p class="small"><code>@_rotationText</code></p>
+}
+
+<p class="text-muted small">
+    Equal Earth is the default, and deliberately: most developers never choose a projection, so the
+    default has to be the defensible one, and Mercator exaggerates high-latitude area by an order
+    of magnitude, which is exactly wrong when area encodes a value. On <code>orthographic</code> a
+    drag turns the sphere (a quaternion path, so there is no gimbal wobble) and a camera move to a
+    place turns the globe rather than panning a plane.
+</p>
+
+@code {
+    private static readonly (string Name, string Label)[] _projections =
+    [
+        (Projections.EqualEarth, "Equal Earth (default)"),
+        (Projections.NaturalEarth, "Natural Earth"),
+        (Projections.Mercator, "Mercator"),
+        (Projections.WebMercator, "Web Mercator (EPSG:3857)"),
+        (Projections.Equirectangular, "Equirectangular"),
+        (Projections.Orthographic, "Orthographic (globe)"),
+        (Projections.AzimuthalEqualArea, "Azimuthal equal-area"),
+        (Projections.AzimuthalEquidistant, "Azimuthal equidistant"),
+        (Projections.Stereographic, "Stereographic"),
+        (Projections.Gnomonic, "Gnomonic"),
+        (Projections.Albers, "Albers conic"),
+        (Projections.ConicConformal, "Conic conformal"),
+        (Projections.ConicEqualArea, "Conic equal-area"),
+        (Projections.ConicEquidistant, "Conic equidistant"),
+        (Projections.TransverseMercator, "Transverse Mercator"),
+    ];
+
+    private ApexMaps? _map;
+    private string _projection = Projections.Orthographic;
+    private bool _graticule = true;
+    private bool _sphere = true;
+    private double _lambda = -20;
+    private string? _rotationText;
+
+    private MapsOptions _options = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private async Task Spin(double degrees)
+    {
+        if (_map is null) return;
+        _lambda += degrees;
+        await _map.RotateToAsync(_lambda, -15);
+    }
+
+    private async Task ShowRotation()
+    {
+        if (_map is null) return;
+        var rotation = await _map.GetRotationAsync();
+        var zoom = await _map.GetZoomAsync();
+        _rotationText = $"rotate: [{rotation[0]:0.#}, {rotation[1]:0.#}, {rotation[2]:0.#}], zoom: {zoom:0.##}";
+    }
+
+    private void Rebuild()
+    {
+        var isGlobe = _projection == Projections.Orthographic;
+        _options = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.WorldCountries110m,
+                // A spec object rather than a name, so the conics get their standard parallels and
+                // the globe opens facing somewhere other than the Atlantic.
+                Projection = new ProjectionSpec
+                {
+                    Name = _projection,
+                    Rotate = isGlobe ? [_lambda, -15] : null,
+                    Parallels = _projection.StartsWith("conic") || _projection == Projections.Albers
+                        ? [20, 50]
+                        : null,
+                },
+                View = new ViewOptions { Fit = isGlobe ? ViewFitMode.World : ViewFitMode.Data, Padding = 20 },
+                Graticule = new GraticuleOptions { Show = _graticule, Step = 20 },
+                Sphere = new SphereOptions { Show = _sphere },
+            },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = "Renewable electricity (%)",
+                    JoinBy = JoinSpec.Between("iso_a3", "code"),
+                    Data = SampleData.Renewables,
+                    Scale = new ScaleOptions { Palette = Palettes.Greens },
+                },
+            ],
+            Interaction = new InteractionOptions
+            {
+                // 'auto' already turns rotation on for a globe and off for a flat map; stated here
+                // because this page switches between the two.
+                Rotate = new RotateOptions { Enabled = AutoBool.Auto, Inertia = true },
+            },
+            Legend = new LegendOptions { Position = LegendPosition.Right, Style = LegendStyle.Gradient },
+        };
+    }
+}

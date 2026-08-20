@@ -1,0 +1,94 @@
+@page "/choropleth"
+
+<PageTitle>Choropleth - Blazor-ApexMaps</PageTitle>
+
+<h1>Choropleth</h1>
+
+<p class="lead">
+    Areas coloured by value. The join is the whole configuration: which geometry property holds the
+    key, and which data property matches it.
+</p>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="normalize"
+               checked="@_normalize" @onchange="ToggleNormalize" />
+        <label class="form-check-label" for="normalize">
+            Per capita (<code>NormalizeBy</code>)
+        </label>
+    </div>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="labels"
+               checked="@_labels" @onchange="ToggleLabels" />
+        <label class="form-check-label" for="labels">Data labels</label>
+    </div>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_options" Height="480" />
+</div>
+
+<p class="text-muted small">
+    A count divided by population is a different map: switching to per capita retitles the legend
+    on its own, because a choropleth of counts across unequal areas mostly redraws the population
+    map. Features with no row keep the no-data colour rather than falling into the lowest class,
+    which would understate them.
+</p>
+
+@code {
+    private bool _normalize;
+    private bool _labels;
+
+    private MapsOptions _options = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void ToggleNormalize(ChangeEventArgs e)
+    {
+        _normalize = (bool?)e.Value ?? false;
+        Rebuild();
+    }
+
+    private void ToggleLabels(ChangeEventArgs e)
+    {
+        _labels = (bool?)e.Value ?? false;
+        Rebuild();
+    }
+
+    // A new options object each time: the component compares what it last sent to the browser, so
+    // a rebuilt tree that says the same thing is not a redraw.
+    private void Rebuild()
+    {
+        _options = new MapsOptions
+        {
+            Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = _normalize ? "Renewable electricity per million people" : "Renewable electricity (%)",
+                    JoinBy = JoinSpec.Between("iso_a3", "code"),
+                    Data = SampleData.Renewables,
+                    NormalizeBy = _normalize ? "population" : null,
+                    Scale = new ScaleOptions { Type = ScaleType.Quantile, Classes = 5, Palette = Palettes.Teal },
+                },
+            ],
+            DataLabels = new DataLabelOptions
+            {
+                Enabled = _labels,
+                Collision = LabelCollision.Hide,
+                MinFeatureArea = 1200,
+            },
+            Legend = new LegendOptions { Position = LegendPosition.Bottom, Interactive = true },
+            Tooltip = new TooltipOptions
+            {
+                // Formatters run per mark in the browser, so they travel as source and are
+                // compiled once rather than called back into .NET per hover.
+                Formatter = JsFunction.From(
+                    "ctx => ctx.value == null " +
+                    "? `<b>${ctx.name}</b><br>no data` " +
+                    ": `<b>${ctx.name}</b><br>${ctx.value.toFixed(1)}`"),
+            },
+        };
+    }
+}

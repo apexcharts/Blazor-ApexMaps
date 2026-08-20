@@ -1,0 +1,102 @@
+@page "/selection"
+
+<PageTitle>Selection &amp; linking - Blazor-ApexMaps</PageTitle>
+
+<h1>Selection &amp; linking</h1>
+
+<p class="lead">
+    Click to select, shift-drag a box to select several, and watch both maps follow: they name the
+    same link group, so brushing one brushes the other.
+</p>
+
+<div class="demo-toolbar">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="SelectNordics">Select the Nordics</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Clear">Clear</button>
+    <span class="text-muted small">
+        @(_selected.Count == 0 ? "nothing selected" : $"{_selected.Count} selected: {string.Join(", ", _selected.Take(8))}")
+    </span>
+</div>
+
+<div class="demo-grid">
+    <div class="demo-card">
+        <h2 class="h6">Renewable electricity</h2>
+        <ApexMaps @ref="_left" Options="_leftOptions" Height="380" OnSelectionChange="OnSelectionChange" />
+    </div>
+    <div class="demo-card">
+        <h2 class="h6">Population</h2>
+        <ApexMaps Options="_rightOptions" Height="380" />
+    </div>
+</div>
+
+<p class="text-muted small">
+    Box selection costs nothing when unused, because a plain drag still pans: shift is what turns a
+    drag into a box, which is the convention wherever a drag already means something else. Keys
+    have to mean the same thing across a link group, which they do here because both maps are the
+    same geography joined on the same key. Non-selected features dim on both.
+</p>
+
+@code {
+    private ApexMaps? _left;
+    private List<string> _selected = [];
+
+    private readonly MapsOptions _leftOptions = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+                Scale = new ScaleOptions { Palette = Palettes.Greens },
+            },
+        ],
+        Legend = new LegendOptions { Position = LegendPosition.Bottom },
+        Interaction = new InteractionOptions
+        {
+            Selection = new SelectionOptions
+            {
+                Enabled = true,
+                Multiple = true,
+                Rectangle = true,
+                Modifier = SelectionModifier.Shift,
+            },
+        },
+        Link = new LinkOptions { Group = "demo", Filter = LinkFilter.Bidirectional },
+    };
+
+    private readonly MapsOptions _rightOptions = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Population (millions)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+                ValueField = "population",
+                Scale = new ScaleOptions { Type = ScaleType.Log, Palette = Palettes.Purples },
+            },
+        ],
+        Legend = new LegendOptions { Position = LegendPosition.Bottom },
+        Interaction = new InteractionOptions
+        {
+            Selection = new SelectionOptions { Enabled = true, Multiple = true },
+        },
+        Link = new LinkOptions { Group = "demo" },
+    };
+
+    private async Task SelectNordics()
+    {
+        if (_left is not null) await _left.SetSelectionAsync("NOR", "SWE", "DNK");
+    }
+
+    private async Task Clear()
+    {
+        if (_left is not null) await _left.ClearSelectionAsync();
+    }
+
+    private void OnSelectionChange(SelectionChangeEventArgs e) => _selected = e.Ids;
+}

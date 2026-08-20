@@ -1,0 +1,127 @@
+@page "/routes"
+
+<PageTitle>Arcs &amp; routes - Blazor-ApexMaps</PageTitle>
+
+<h1>Arcs &amp; routes</h1>
+
+<p class="lead">
+    An arc derives the great circle between two endpoints. A line series draws the path it is
+    given. Both can send beads along themselves, so a connection reads as a direction.
+</p>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="geodesic" checked="@_geodesic"
+               @onchange="e => Set(() => _geodesic = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="geodesic">Geodesic</label>
+    </div>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="flow" checked="@_flow"
+               @onchange="e => Set(() => _flow = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="flow">Flow beads</label>
+    </div>
+    <label>
+        Curvature
+        <input class="form-range" type="range" min="0" max="0.6" step="0.05" value="@_curvature"
+               @onchange="e => Set(() => _curvature = double.TryParse(e.Value?.ToString(), out var v) ? v : 0)" />
+    </label>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_arcOptions" Height="480" />
+</div>
+
+<p class="text-muted small">
+    Geodesic is on by default and it matters: a straight line between Singapore and London in
+    Mercator is not the route a plane flies, and naive straight lines break at the antimeridian.
+    Curvature bulges the arc off that path, so it is decorative rather than geographic and off by
+    default. Beads travel from <code>From</code> towards <code>To</code>, staggered per route so a
+    corridor reads as traffic rather than one synchronised pulse; reduced motion leaves them in
+    place and stops them moving, because a dotted route still reads as a route.
+</p>
+
+<h2 class="h5 mt-4">Routes through given vertices</h2>
+
+<div class="demo-card">
+    <ApexMaps Options="_lineOptions" Height="440" />
+</div>
+
+<p class="text-muted small">
+    Two ways from Rotterdam to Singapore, each drawn through its own waypoints: a GPS trace, a
+    shipping lane or a transit line is a path, not a pair of endpoints.
+</p>
+
+@code {
+    private bool _geodesic = true;
+    private bool _flow = true;
+    private double _curvature;
+
+    private MapsOptions _arcOptions = null!;
+    private MapsOptions _lineOptions = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        _arcOptions = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.WorldCountries110m,
+                Fill = "#e5e7eb",
+                View = new ViewOptions { Fit = ViewFitMode.World, Padding = 16 },
+            },
+            Series =
+            [
+                new ArcSeries
+                {
+                    Name = "Weekly seats",
+                    Data = SampleData.Flights,
+                    Geodesic = _geodesic,
+                    Curvature = _curvature > 0 ? _curvature : null,
+                    Width = new SizeOptions { Range = [1, 6] },
+                    ColorScale = new ScaleOptions { Palette = Palettes.Magma, Reverse = true },
+                    Endpoints = new EndpointOptions { Show = true, Radius = 3 },
+                    Flow = _flow ? new FlowOptions { Speed = 80, Spacing = 48 } : null,
+                    Opacity = 0.85,
+                },
+            ],
+            Legend = new LegendOptions { Position = LegendPosition.Bottom, Title = "Weekly seats" },
+            Tooltip = new TooltipOptions
+            {
+                Formatter = JsFunction.From(
+                    "ctx => `<b>${ctx.name}</b><br>${(ctx.value ?? 0).toLocaleString()} seats/week`"),
+            },
+        };
+
+        _lineOptions = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.WorldCountries110m,
+                Fill = "#eef2f7",
+                View = new ViewOptions { Fit = new GeoBounds(-25, -45, 115, 62), Padding = 20 },
+            },
+            Series =
+            [
+                new LineSeries
+                {
+                    Name = "Shipping lanes",
+                    Data = SampleData.ShippingLanes,
+                    Width = new SizeOptions { Range = [2, 5] },
+                    Color = "#7c3aed",
+                    Endpoints = new EndpointOptions { Show = true, Radius = 4 },
+                    Flow = _flow ? new FlowOptions { Style = FlowStyle.Dots, Speed = 60 } : null,
+                },
+            ],
+            Legend = new LegendOptions { Show = false },
+            Tooltip = new TooltipOptions { Formatter = JsFunction.From("ctx => `<b>${ctx.name}</b>`") },
+        };
+    }
+}

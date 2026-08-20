@@ -1,0 +1,152 @@
+@page "/points"
+
+<PageTitle>Bubbles &amp; markers - Blazor-ApexMaps</PageTitle>
+
+<h1>Bubbles &amp; markers</h1>
+
+<p class="lead">
+    A bubble's area carries a quantity. A marker says something is here. They are different series
+    because they answer different questions.
+</p>
+
+<div class="demo-toolbar">
+    <label>
+        Size scale
+        <select class="form-select form-select-sm" value="@_sizeScale"
+                @onchange="e => Set(() => _sizeScale = Enum.Parse<SizeScaleType>(e.Value?.ToString() ?? nameof(SizeScaleType.Sqrt)))">
+            <option value="@SizeScaleType.Sqrt">Sqrt (default)</option>
+            <option value="@SizeScaleType.Linear">Linear</option>
+        </select>
+    </label>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="basemap" checked="@_choropleth"
+               @onchange="e => Set(() => _choropleth = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="basemap">Choropleth underneath</label>
+    </div>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_bubbleOptions" Height="480" />
+</div>
+
+<p class="text-muted small">
+    Sqrt is the default because radius proportional to value makes a circle's <em>area</em> grow
+    with the square of it, and area is what a reader reads. Switch to linear and Tokyo swallows
+    Europe. Largest bubbles are drawn first, so the small ones stay clickable on top, and a pointer
+    within a few pixels of a bubble hovers it, so a 3px mark does not demand a 3px hit.
+</p>
+
+<h2 class="h5 mt-4">Markers, categories and clustering</h2>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="cluster" checked="@_cluster"
+               @onchange="e => Set(() => _cluster = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="cluster">Cluster</label>
+    </div>
+    <label>
+        Shape
+        <select class="form-select form-select-sm" value="@_shape"
+                @onchange="e => Set(() => _shape = Enum.Parse<MarkerShape>(e.Value?.ToString() ?? nameof(MarkerShape.Pin)))">
+            @foreach (var shape in Enum.GetValues<MarkerShape>())
+            {
+                <option value="@shape">@shape</option>
+            }
+        </select>
+    </label>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_markerOptions" Height="480" />
+</div>
+
+<p class="text-muted small">
+    Clustering is an option on the marker series rather than a series of its own: the data is
+    identical either way, so a zoom threshold never means swapping series types. Zoom in and the
+    clusters dissolve into their members. Every shape is a generated path, so there is no sprite
+    sheet, no image load and no CORS.
+</p>
+
+@code {
+    private SizeScaleType _sizeScale = SizeScaleType.Sqrt;
+    private bool _choropleth = true;
+    private bool _cluster = true;
+    private MarkerShape _shape = MarkerShape.Pin;
+
+    private MapsOptions _bubbleOptions = null!;
+    private MapsOptions _markerOptions = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        var series = new List<MapSeries>();
+        if (_choropleth)
+        {
+            series.Add(new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+                Scale = new ScaleOptions { Palette = Palettes.Greys, Classes = 4 },
+                Opacity = 0.75,
+            });
+        }
+        series.Add(new BubbleSeries
+        {
+            Name = "Metro population (millions)",
+            Data = SampleData.MetroPopulations,
+            Size = new SizeOptions { Scale = _sizeScale, Range = [3, 30] },
+            Color = "#0ea5e9",
+            Stroke = new StrokeOptions { Color = "#0369a1", Width = 1 },
+        });
+
+        _bubbleOptions = new MapsOptions
+        {
+            Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+            Series = series,
+            Legend = new LegendOptions { Position = LegendPosition.Bottom, Show = _choropleth },
+            Tooltip = new TooltipOptions
+            {
+                Formatter = JsFunction.From("ctx => `<b>${ctx.name}</b><br>${ctx.value ?? '-'}`"),
+            },
+            Interaction = new InteractionOptions
+            {
+                Nearest = new NearestOptions { Enabled = true, Radius = 14 },
+            },
+        };
+
+        _markerOptions = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.WorldCountries110m,
+                View = new ViewOptions { Fit = new GeoBounds(-6, 40, 24, 56), Padding = 24 },
+            },
+            Series =
+            [
+                new MarkerSeries
+                {
+                    Name = "Sites",
+                    Data = SampleData.Sites,
+                    Shape = _shape,
+                    Size = 12,
+                    ColorBy = "kind",
+                    Palette = Palettes.OkabeIto,
+                    Cluster = _cluster ? new ClusterOptions { Radius = 55, MaxZoom = 6, ShowCount = true } : null,
+                },
+            ],
+            Legend = new LegendOptions { Position = LegendPosition.Bottom, Title = "Site type" },
+            Tooltip = new TooltipOptions
+            {
+                Formatter = JsFunction.From("ctx => `<b>${ctx.name}</b><br>${ctx.datum?.kind ?? ''}`"),
+            },
+        };
+    }
+}

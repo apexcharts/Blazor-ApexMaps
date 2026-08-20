@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Blazor_ApexMaps</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- 1591: the Razor compiler generates members we do not author and cannot document. -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
+
+    <!-- nuget package metadata -->
+    <PackageId>Blazor-ApexMaps</PackageId>
+    <Title>Blazor ApexMaps</Title>
+    <Description>Blazor wrapper for ApexMaps - interactive geographic data visualization: choropleths, proportional-symbol bubbles, markers with clustering, great-circle arcs and routes, 13 projections, a built-in geometry registry, drilldown, linked selection and PNG/SVG export.</Description>
+    <Authors>ApexCharts</Authors>
+    <Company>ApexCharts</Company>
+    <Copyright>Copyright © ApexCharts</Copyright>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/apexcharts/Blazor-ApexMaps</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/apexcharts/Blazor-ApexMaps</PackageProjectUrl>
+    <PackageTags>blazor;maps;choropleth;geojson;topojson;geographic;map;apexmaps;visualization;webassembly</PackageTags>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <PackageReleaseNotes>
+      1.0.0 Initial release. Wraps apexmaps 0.3.0: choropleth, bubble, marker, arc and line series;
+      13 projections with spec objects; the built-in geometry registry (26 packs, fetched on demand);
+      scales, palettes, pattern and image fills; legend, tooltip, data labels and editorial annotations;
+      zoom, pan, globe rotation, box selection, linked selection and drilldown; the camera API
+      (flyTo/easeTo/jumpTo/fitBounds/frameFeature/resetView); PNG and SVG export; all 17 core events.
+    </PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+    <None Include="icon.png" Pack="true" PackagePath="" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

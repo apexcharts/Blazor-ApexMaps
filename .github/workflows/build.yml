@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore Blazor-ApexMaps.sln
+
+      - name: Build
+        run: dotnet build Blazor-ApexMaps.sln -c Release --no-restore
+
+      # Packing in CI catches the metadata mistakes that only bite at publish time: a missing
+      # README or icon path, or a stale version.
+      - name: Pack
+        run: dotnet pack src/Blazor-ApexMaps/Blazor-ApexMaps.csproj -c Release --no-build -o ./artifacts
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./artifacts/*.nupkg
+          retention-days: 7

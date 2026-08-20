@@ -1,0 +1,116 @@
+@page "/drilldown"
+
+<PageTitle>Drilldown - Blazor-ApexMaps</PageTitle>
+
+<h1>Drilldown</h1>
+
+<p class="lead">
+    Click a state to open its counties. The geography does not move across the swap: the level
+    being left dissolves over the framed feature, and the child develops out of the parent's own
+    colour.
+</p>
+
+<div class="demo-toolbar">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="DrillCalifornia">Drill to California</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="DrillTexas">Drill to Texas</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Up">Up one level</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Top">Back to the top</button>
+    <span class="text-muted small">Depth: @_depth</span>
+</div>
+
+<div class="demo-card">
+    <ApexMaps @ref="_map" Options="_options" Height="500"
+              OnDrilldown="OnDrilldown" OnDrillup="OnDrillup" />
+</div>
+
+@if (_log.Count > 0)
+{
+    <ul class="event-log">
+        @foreach (var line in _log)
+        {
+            <li><code>@line</code></li>
+        }
+    </ul>
+}
+
+<p class="text-muted small">
+    The child level is scoped automatically: county FIPS <code>06037</code> sits under state
+    <code>06</code>, and published hierarchical geometry nearly always carries either a parent
+    property or a key prefix, so the common case needs no configuration. This demo carries state
+    rows only, so the counties arrive as no-data, which is exactly the case
+    <code>OnDrilldown</code> exists for: it fires once the level is on screen, so a handler can
+    fetch that level's rows and call <code>UpdateSeriesAsync</code>. A series whose data already
+    holds rows for both levels needs no handler at all.
+</p>
+
+@code {
+    private ApexMaps? _map;
+    private int _depth;
+    private readonly List<string> _log = [];
+
+    private readonly MapsOptions _options = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.Us },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Broadband adoption (%)",
+                // us/states joins on `abbr`, which is the key that pack recommends.
+                JoinBy = "abbr",
+                Data = SampleData.Broadband,
+                Scale = new ScaleOptions { Type = ScaleType.Jenks, Classes = 5, Palette = Palettes.Blues },
+                Drilldown = new DrilldownOptions
+                {
+                    Map = GeoMaps.UsCounties,
+                    Scope = DrilldownScope.Auto,
+                    Animate = DrilldownAnimation.Zoom,
+                    Breadcrumb = new BreadcrumbOptions { RootLabel = "United States" },
+                },
+            },
+        ],
+        Legend = new LegendOptions { Position = LegendPosition.Bottom },
+        Tooltip = new TooltipOptions
+        {
+            Formatter = JsFunction.From(
+                "ctx => ctx.value == null ? `<b>${ctx.name}</b><br>no data` : `<b>${ctx.name}</b><br>${ctx.value}%`"),
+        },
+    };
+
+    private Task DrillCalifornia() => Drill("CA");
+
+    private Task DrillTexas() => Drill("TX");
+
+    private async Task Drill(string key)
+    {
+        if (_map is not null) await _map.DrillToAsync(key);
+    }
+
+    private async Task Up()
+    {
+        if (_map is not null) await _map.DrillUpAsync();
+    }
+
+    private async Task Top()
+    {
+        if (_map is not null) await _map.DrillUpAsync(int.MaxValue);
+    }
+
+    private void OnDrilldown(DrilldownEventArgs e)
+    {
+        _depth = e.Depth;
+        Log($"drilldown: {e.Key} ({e.Name}) -> {e.To}, {e.FeatureCount} features");
+    }
+
+    private void OnDrillup(DrillupEventArgs e)
+    {
+        _depth = e.Depth;
+        Log($"drillup: now at {e.To ?? "the top"}, depth {e.Depth}");
+    }
+
+    private void Log(string line)
+    {
+        _log.Insert(0, line);
+        if (_log.Count > 6) _log.RemoveAt(_log.Count - 1);
+    }
+}

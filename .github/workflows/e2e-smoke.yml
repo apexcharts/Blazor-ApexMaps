@@ -1,0 +1,64 @@
+name: E2E Smoke (browser render + interaction)
+
+# Drives the sample WASM app in a real headless browser to catch interop-only regressions: a map
+# that builds and serializes fine but fails to render, to compile a formatter, to fetch geometry or
+# to wire up events in the browser. Especially matters when the vendored apexmaps core is bumped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build sample
+        run: dotnet build src/Blazor-ApexMaps.Sample/Blazor-ApexMaps.Sample.csproj -c Debug
+
+      - name: Install Playwright (chromium)
+        working-directory: tests/e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run sample (background)
+        run: |
+          nohup dotnet run --project src/Blazor-ApexMaps.Sample/Blazor-ApexMaps.Sample.csproj -c Debug --no-build --urls http://localhost:5186 > demo.log 2>&1 &
+          echo "Waiting for the sample to come up..."
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5186/ || true)
+            if [ "$code" = "200" ]; then echo "Sample up after ${i}s"; break; fi
+            sleep 2
+          done
+
+      - name: Run smoke test
+        working-directory: tests/e2e
+        env:
+          BASE_URL: http://localhost:5186
+        run: npm test
+
+      - name: Upload sample log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-log
+          path: demo.log
+          if-no-files-found: ignore

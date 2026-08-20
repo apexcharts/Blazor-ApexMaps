@@ -1,0 +1,120 @@
+@page "/scales"
+
+<PageTitle>Scales &amp; palettes - Blazor-ApexMaps</PageTitle>
+
+<h1>Scales &amp; palettes</h1>
+
+<p class="lead">
+    One dataset, four classifications. Classification silently changes a choropleth's conclusion,
+    which is why the break values are printed rather than implied.
+</p>
+
+<div class="demo-toolbar">
+    <label>
+        Classification
+        <select class="form-select form-select-sm" value="@_scaleType"
+                @onchange="e => Set(() => _scaleType = Enum.Parse<ScaleType>(e.Value?.ToString() ?? nameof(ScaleType.Quantile)))">
+            @foreach (var type in _scaleTypes)
+            {
+                <option value="@type">@type</option>
+            }
+        </select>
+    </label>
+    <label>
+        Palette
+        <select class="form-select form-select-sm" value="@_palette"
+                @onchange="e => Set(() => _palette = e.Value?.ToString() ?? Palettes.Blues)">
+            @foreach (var palette in _palettes)
+            {
+                <option value="@palette">@palette</option>
+            }
+        </select>
+    </label>
+    <label>
+        Classes
+        <input class="form-control form-control-sm" type="number" min="3" max="9" value="@_classes"
+               @onchange="e => Set(() => _classes = int.TryParse(e.Value?.ToString(), out var n) ? Math.Clamp(n, 3, 9) : 5)" />
+    </label>
+    <label>
+        Legend
+        <select class="form-select form-select-sm" value="@_legendStyle"
+                @onchange="e => Set(() => _legendStyle = Enum.Parse<LegendStyle>(e.Value?.ToString() ?? nameof(LegendStyle.Auto)))">
+            <option value="@LegendStyle.Auto">Auto</option>
+            <option value="@LegendStyle.Classes">Classes</option>
+            <option value="@LegendStyle.Gradient">Gradient</option>
+        </select>
+    </label>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_options" Height="480" />
+</div>
+
+<p class="text-muted small">
+    Quantile fills every class, so the map always uses its whole palette. Equal interval divides
+    the range instead, so a skewed distribution leaves the top classes empty and the map reads as
+    flat. Jenks minimises within-class variance, which usually looks the most like what the data
+    is doing. Ramps are sampled in OkLab: interpolating through sRGB turns midpoints muddy grey,
+    and readers infer magnitude from perceived lightness.
+</p>
+
+@code {
+    private static readonly ScaleType[] _scaleTypes =
+    [
+        ScaleType.Quantile, ScaleType.EqualInterval, ScaleType.Jenks, ScaleType.Threshold,
+        ScaleType.Linear, ScaleType.Sqrt, ScaleType.Log,
+    ];
+
+    private static readonly string[] _palettes =
+    [
+        Palettes.Teal, Palettes.Blues, Palettes.Greens, Palettes.Oranges, Palettes.Purples,
+        Palettes.Viridis, Palettes.Magma, Palettes.RdBu, Palettes.Spectral, Palettes.OkabeIto,
+    ];
+
+    private ScaleType _scaleType = ScaleType.Quantile;
+    private string _palette = Palettes.Teal;
+    private int _classes = 5;
+    private LegendStyle _legendStyle = LegendStyle.Auto;
+
+    private MapsOptions _options = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        _options = new MapsOptions
+        {
+            Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = "Renewable electricity (%)",
+                    JoinBy = JoinSpec.Between("iso_a3", "code"),
+                    Data = SampleData.Renewables,
+                    Scale = new ScaleOptions
+                    {
+                        Type = _scaleType,
+                        Classes = _classes,
+                        Palette = _palette,
+                        // Threshold is the one type that cannot infer its own breaks.
+                        Breaks = _scaleType == ScaleType.Threshold ? [10, 25, 45, 70] : null,
+                    },
+                },
+            ],
+            Legend = new LegendOptions
+            {
+                Position = LegendPosition.Bottom,
+                Style = _legendStyle,
+                Marker = true,
+                Title = "Renewable electricity (%)",
+            },
+        };
+    }
+}

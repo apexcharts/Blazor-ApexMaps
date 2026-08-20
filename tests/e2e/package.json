@@ -1,0 +1,12 @@
+{
+  "name": "blazor-apexmaps-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Headless browser smoke + interaction test for the Blazor-ApexMaps sample. Guards against interop-only regressions: a map that builds and serializes cleanly but fails to render, to compile a formatter, to fetch geometry, or to wire up events in the browser.",
+  "scripts": {
+    "test": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

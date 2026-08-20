@@ -1,0 +1,152 @@
+@page "/theming"
+
+<PageTitle>Theming &amp; annotations - Blazor-ApexMaps</PageTitle>
+
+<h1>Theming &amp; annotations</h1>
+
+<p class="lead">
+    Dark mode, pattern fills, and the editorial layer that says what a map is about.
+</p>
+
+<div class="demo-toolbar">
+    <label>
+        Theme
+        <select class="form-select form-select-sm" value="@_mode"
+                @onchange="e => Set(() => _mode = Enum.Parse<ThemeMode>(e.Value?.ToString() ?? nameof(ThemeMode.Light)))">
+            <option value="@ThemeMode.Light">Light</option>
+            <option value="@ThemeMode.Dark">Dark</option>
+            <option value="@ThemeMode.Auto">Auto (follow the system)</option>
+        </select>
+    </label>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="pattern" checked="@_pattern"
+               @onchange="e => Set(() => _pattern = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="pattern">Pattern fill</label>
+    </div>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="annotations" checked="@_annotations"
+               @onchange="e => Set(() => _annotations = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="annotations">Annotations</label>
+    </div>
+</div>
+
+<div class="demo-card @(_mode == ThemeMode.Dark ? "demo-card-dark" : null)">
+    <ApexMaps Options="_options" Height="500" />
+</div>
+
+<p class="text-muted small">
+    The map's chrome reads <code>--apexmaps-*</code> custom properties, and below those the family
+    tokens <code>--apx-accent</code>, <code>--apx-fore</code>, <code>--apx-grid</code> and
+    <code>--apx-surface</code>, so a page states its brand once and every Apex chart on it follows.
+    Dark mode deliberately does not take those tokens: one set of values describes one appearance,
+    and a light brand surface plus a dark map would put white text on white. Override
+    <code>--apexmaps-*</code> under <code>.apexmaps--dark</code> to brand dark mode.
+</p>
+
+<p class="text-muted small">
+    A pattern is a mark on a colour, not a replacement for it: the tiles are small against their
+    spacing on purpose, because tightening them averages the ink with the fill into a shade that is
+    on no scale. Legend swatches draw the same tile, so the key still matches the map. No-data
+    features are never textured: an absence has to keep reading as an absence.
+</p>
+
+@code {
+    private ThemeMode _mode = ThemeMode.Light;
+    private bool _pattern;
+    private bool _annotations = true;
+
+    private MapsOptions _options = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        _options = new MapsOptions
+        {
+            Chart = new ChartOptions { Background = _mode == ThemeMode.Dark ? "#0f172a" : null },
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.WorldCountries110m,
+                View = new ViewOptions { Fit = new GeoBounds(-25, 33, 45, 72), Padding = 24 },
+            },
+            Theme = new ThemeOptions { Mode = _mode },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = "Renewable electricity (%)",
+                    JoinBy = JoinSpec.Between("iso_a3", "code"),
+                    Data = SampleData.Renewables,
+                    Scale = new ScaleOptions { Type = ScaleType.Quantile, Classes = 5, Palette = Palettes.Oranges },
+                    Fill = _pattern
+                        ? new SeriesFillOptions
+                        {
+                            // A tile decided per feature: the leaders get a denser texture, so the
+                            // top of the scale reads as the top of the scale in print and in
+                            // greyscale too.
+                            Pattern = JsFunction.From(
+                                "ctx => ctx.value == null ? null : " +
+                                "({ type: ctx.value > 55 ? 'crosshatch' : 'diagonal', size: 9, angle: 45 })"),
+                        }
+                        : null,
+                },
+            ],
+            Annotations = _annotations
+                ? new AnnotationOptions
+                {
+                    Features =
+                    [
+                        new FeatureAnnotation
+                        {
+                            Key = "NOR",
+                            Outline = true,
+                            Label = new AnnotationLabel
+                            {
+                                Text = "Norway: 98.5% hydro",
+                                Position = AnnotationLabelPosition.Right,
+                                OffsetX = 12,
+                            },
+                            Connector = true,
+                        },
+                    ],
+                    Points =
+                    [
+                        new PointAnnotation
+                        {
+                            At = new LonLat(-3.7, 40.4),
+                            Label = "Iberian wind and solar",
+                            Marker = new AnnotationMarker { Show = true, Shape = MarkerShape.Circle, Size = 8 },
+                        },
+                    ],
+                    Areas =
+                    [
+                        new AreaAnnotation
+                        {
+                            Bounds = new GeoBounds(4, 54, 25, 62),
+                            Fill = "#38bdf8",
+                            FillOpacity = 0.12,
+                            Stroke = new StrokeOptions { Color = "#0284c7", Width = 1, DashArray = "4 3" },
+                            Label = "Nordic pool",
+                        },
+                    ],
+                }
+                : null,
+            Legend = new LegendOptions { Position = LegendPosition.Right, Title = "Renewables" },
+            Responsive =
+            [
+                // Below 720px the legend column is most of the card, so it moves under the plot.
+                new ResponsiveRule
+                {
+                    Breakpoint = 720,
+                    Options = new MapsOptions { Legend = new LegendOptions { Position = LegendPosition.Bottom } },
+                },
+            ],
+        };
+    }
+}

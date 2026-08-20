@@ -1,0 +1,88 @@
+@page "/"
+
+<PageTitle>Blazor-ApexMaps</PageTitle>
+
+<h1>Blazor-ApexMaps</h1>
+
+<p class="lead">
+    Interactive geographic data visualization for Blazor: choropleths, proportional symbols,
+    markers with clustering, great-circle arcs and routes, on 13 projections and 26 built-in
+    geometry packs.
+</p>
+
+<div class="demo-card">
+    <ApexMaps Options="_options" Height="440" />
+</div>
+
+<p class="text-muted small">
+    Two option keys and no styling. The scale, the classification, the legend, the tooltip, the
+    projection and the framing are all defaults.
+</p>
+
+<h2 class="h5 mt-4">That map, in full</h2>
+
+<pre class="code-block"><code>&lt;ApexMaps Options="_options" Height="440" /&gt;
+
+@@code {
+    private readonly MapsOptions _options = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+            },
+        ],
+    };
+}</code></pre>
+
+<h2 class="h5 mt-4">Getting started</h2>
+
+<pre class="code-block"><code>dotnet add package Blazor-ApexMaps</code></pre>
+
+<pre class="code-block"><code>// Program.cs
+builder.Services.AddApexMaps(options =&gt;
+{
+    options.LicenseKey = "APEX-xxxxxxxx"; // optional: without one, licensed features are watermarked
+});</code></pre>
+
+<p>
+    No script tag, no CDN reference and no stylesheet link: the package carries the apexmaps core as
+    an ES module and the core injects its own CSS. Geometry is fetched only when a pack is named,
+    one request per pack.
+</p>
+
+<h2 class="h5 mt-4">The demos</h2>
+
+<ul>
+    <li><a href="choropleth">Choropleth</a> - the defaults, then normalising counts into rates.</li>
+    <li><a href="scales">Scales &amp; palettes</a> - what classification does to the same numbers.</li>
+    <li><a href="projections">Projections &amp; globe</a> - 13 projections, and a sphere you can spin.</li>
+    <li><a href="points">Bubbles &amp; markers</a> - proportional symbols, seven shapes, clustering.</li>
+    <li><a href="routes">Arcs &amp; routes</a> - great circles with travelling flow, and given paths.</li>
+    <li><a href="drilldown">Drilldown</a> - states into counties, with a breadcrumb back out.</li>
+    <li><a href="selection">Selection &amp; linking</a> - box selection brushing a linked pair.</li>
+    <li><a href="camera">Camera &amp; export</a> - flyTo, framing, PNG and SVG.</li>
+    <li><a href="theming">Theming &amp; annotations</a> - dark mode, patterns, editorial overlay.</li>
+    <li><a href="joins">Join diagnostics</a> - a failing join explained, then repaired.</li>
+    <li><a href="events">Events</a> - all 17, as they happen.</li>
+</ul>
+
+@code {
+    private readonly MapsOptions _options = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+            },
+        ],
+    };
+}

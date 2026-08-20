@@ -1,0 +1,458 @@
+@using System.Text.Json.Nodes
+@using Microsoft.JSInterop
+@using Blazor_ApexMaps.Interop
+@using Blazor_ApexMaps.Models
+@using Blazor_ApexMaps.Serialization
+@using Blazor_ApexMaps.Services
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+@inject ApexMapsRuntimeService Runtime
+
+<div id="@_mapId" class="@Class" style="@Style"></div>
+
+@code {
+    private readonly string _mapId = $"apexmap-{Guid.NewGuid():N}";
+    private ApexMapsInterop? _interop;
+    private DotNetObjectReference<ApexMaps>? _dotNetRef;
+    private bool _rendered;
+
+    // The core registers the instance the moment it is constructed and emits `rendered` before
+    // init returns, so a handler on OnRendered runs while _rendered is still false. This tracks the
+    // narrower thing the methods actually need: that there is an instance in the browser to talk to.
+    private bool _ready;
+
+    // What was last sent to the browser, so a parameter change can be compared against it rather
+    // than guessed at. Blazor re-runs OnParametersSet whenever the parent re-renders, so without
+    // this a parent that rebuilds its options object every render would redraw the map every time.
+    private string? _sentOptionsJson;
+
+    /// <summary>The whole option tree.</summary>
+    [Parameter] public MapsOptions Options { get; set; } = new();
+
+    /// <summary>
+    /// The series. Takes precedence over <see cref="MapsOptions.Series"/> when set, so data can
+    /// live in its own parameter and change without touching the options.
+    /// </summary>
+    [Parameter] public List<MapSeries>? Series { get; set; }
+
+    /// <summary>
+    /// Geometry source, as a shorthand for <see cref="GeoOptions.Map"/>: a registry id from
+    /// <see cref="GeoMaps"/>, or a URL.
+    /// </summary>
+    [Parameter] public string? Map { get; set; }
+
+    /// <summary>Plot width, as a shorthand for <see cref="ChartOptions.Width"/>.</summary>
+    [Parameter] public Dimension? Width { get; set; }
+
+    /// <summary>Plot height, as a shorthand for <see cref="ChartOptions.Height"/>.</summary>
+    [Parameter] public Dimension? Height { get; set; }
+
+    /// <summary>Class on the container element.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Inline style on the container element.</summary>
+    [Parameter] public string? Style { get; set; }
+
+    /// <summary>
+    /// Apply parameter changes to the live map. Default true: a changed series tweens, and a
+    /// changed projection or map reprojects. Turn it off to drive the map only through its methods.
+    /// </summary>
+    [Parameter] public bool AutoUpdate { get; set; } = true;
+
+    /// <summary>Raised once the map is on screen, geometry included.</summary>
+    [Parameter] public EventCallback OnRendered { get; set; }
+
+    /// <summary>Raised after an update redraws.</summary>
+    [Parameter] public EventCallback OnUpdated { get; set; }
+
+    /// <summary>Raised when the plot is resized.</summary>
+    [Parameter] public EventCallback<ResizeEventArgs> OnResized { get; set; }
+
+    /// <summary>An area feature was clicked.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnFeatureClick { get; set; }
+
+    /// <summary>An area feature was hovered.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnFeatureHover { get; set; }
+
+    /// <summary>An area feature took keyboard focus.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnFeatureFocus { get; set; }
+
+    /// <summary>A point or route mark was clicked.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnMarkClick { get; set; }
+
+    /// <summary>A point or route mark was hovered.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnMarkHover { get; set; }
+
+    /// <summary>A point cluster was clicked. Raised before the camera moves to its members.</summary>
+    [Parameter] public EventCallback<FeatureEventArgs> OnClusterClick { get; set; }
+
+    /// <summary>
+    /// A deeper level is on screen. Raised after it renders, so a handler can fetch that level's
+    /// data and call <see cref="UpdateSeriesAsync"/>.
+    /// </summary>
+    [Parameter] public EventCallback<DrilldownEventArgs> OnDrilldown { get; set; }
+
+    /// <summary>The map climbed back out of a level.</summary>
+    [Parameter] public EventCallback<DrillupEventArgs> OnDrillup { get; set; }
+
+    /// <summary>The selection changed, here or on a linked map.</summary>
+    [Parameter] public EventCallback<SelectionChangeEventArgs> OnSelectionChange { get; set; }
+
+    /// <summary>A legend class was muted or unmuted.</summary>
+    [Parameter] public EventCallback<LegendToggleEventArgs> OnLegendToggle { get; set; }
+
+    /// <summary>The camera's scale changed.</summary>
+    [Parameter] public EventCallback<ZoomEventArgs> OnZoom { get; set; }
+
+    /// <summary>A pan finished, inertia included.</summary>
+    [Parameter] public EventCallback OnPanEnd { get; set; }
+
+    /// <summary>The globe turned.</summary>
+    [Parameter] public EventCallback<RotateEventArgs> OnRotate { get; set; }
+
+    /// <summary>The globe came to rest, after any inertial glide.</summary>
+    [Parameter] public EventCallback<RotateEventArgs> OnRotateEnd { get; set; }
+
+    /// <summary>True once the map is on screen.</summary>
+    public bool IsRendered => _rendered;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _interop = new ApexMapsInterop(JSRuntime);
+        // The licence key and the geometry source are library-wide, and both have to be set
+        // before a map is created: geometry is fetched during render, and a watermark decision
+        // is made as marks are drawn.
+        await Runtime.InitializeAsync();
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        var payload = BuildPayload();
+        _sentOptionsJson = payload.OptionsJson;
+        _ready = true;
+        _rendered = _ready = await _interop.InitAsync(_mapId, payload.OptionsJson, _dotNetRef);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_ready || !AutoUpdate || _interop is null) return;
+
+        var payload = BuildPayload();
+        if (payload.OptionsJson == _sentOptionsJson) return;
+
+        // A change confined to the series is the common one (new data on the same map), and it is
+        // the cheap one: fills and radii tween instead of the geometry being rebuilt.
+        var seriesOnly = payload.WithoutSeriesJson == WithoutSeries(_sentOptionsJson);
+        _sentOptionsJson = payload.OptionsJson;
+
+        if (seriesOnly && payload.SeriesJson is not null)
+        {
+            await _interop.UpdateSeriesAsync(_mapId, payload.SeriesJson);
+            return;
+        }
+        await _interop.UpdateOptionsAsync(_mapId, payload.OptionsJson);
+    }
+
+    private (string OptionsJson, string? SeriesJson, string WithoutSeriesJson) BuildPayload()
+    {
+        // The convenience parameters are folded into the options tree here rather than at the call
+        // site, so `Map="us"` and `Options.Geo.Map` cannot end up disagreeing on the way out.
+        var series = Series ?? Options.Series;
+        var chart = Options.Chart;
+        var geo = Options.Geo;
+
+        if (Width is not null || Height is not null)
+        {
+            chart = Clone(chart);
+            chart.Width = Width ?? chart.Width;
+            chart.Height = Height ?? chart.Height;
+        }
+        if (Map is not null)
+        {
+            geo = Clone(geo);
+            geo.Map ??= Map;
+        }
+
+        var effective = new MapsOptions
+        {
+            Chart = chart,
+            Geo = geo,
+            Series = series,
+            Legend = Options.Legend,
+            Tooltip = Options.Tooltip,
+            DataLabels = Options.DataLabels,
+            States = Options.States,
+            Theme = Options.Theme,
+            Interaction = Options.Interaction,
+            A11y = Options.A11y,
+            Annotations = Options.Annotations,
+            Link = Options.Link,
+            Debug = Options.Debug,
+            Responsive = Options.Responsive,
+            AdditionalOptions = Options.AdditionalOptions,
+        };
+
+        var optionsJson = MapsSerializer.Serialize(effective);
+        var seriesJson = series is null ? null : MapsSerializer.Serialize(series);
+        return (optionsJson, seriesJson, WithoutSeries(optionsJson));
+    }
+
+    private static ChartOptions Clone(ChartOptions? source)
+        => source is null
+            ? new ChartOptions()
+            : new ChartOptions
+            {
+                Width = source.Width,
+                Height = source.Height,
+                Type = source.Type,
+                Background = source.Background,
+                FontFamily = source.FontFamily,
+                Context = source.Context,
+                Animations = source.Animations,
+            };
+
+    private static GeoOptions Clone(GeoOptions? source)
+        => source is null
+            ? new GeoOptions()
+            : new GeoOptions
+            {
+                Map = source.Map,
+                Object = source.Object,
+                KeyField = source.KeyField,
+                NameField = source.NameField,
+                RepairWinding = source.RepairWinding,
+                Projection = source.Projection,
+                View = source.View,
+                Graticule = source.Graticule,
+                Sphere = source.Sphere,
+                Fill = source.Fill,
+                Boundaries = source.Boundaries,
+            };
+
+    /// <summary>The options JSON with its series removed, so the rest can be compared on its own.</summary>
+    private static string WithoutSeries(string? optionsJson)
+    {
+        if (string.IsNullOrEmpty(optionsJson)) return "{}";
+        var node = JsonNode.Parse(optionsJson);
+        if (node is JsonObject obj) obj.Remove("series");
+        return node?.ToJsonString() ?? "{}";
+    }
+
+    // --- public API ----------------------------------------------------------
+
+    /// <summary>Re-applies the current parameters to the live map.</summary>
+    public async Task UpdateAsync(bool redrawGeometry = false)
+    {
+        if (_interop is null || !_ready) return;
+        var payload = BuildPayload();
+        _sentOptionsJson = payload.OptionsJson;
+        await _interop.UpdateOptionsAsync(_mapId, payload.OptionsJson, redrawGeometry);
+    }
+
+    /// <summary>
+    /// Merges options into the live map. Geometry is reprojected when the map or the projection
+    /// changed, so <paramref name="redrawGeometry"/> is only for the exotic cases that inference
+    /// misses.
+    /// </summary>
+    public async Task UpdateOptionsAsync(MapsOptions options, bool redrawGeometry = false)
+    {
+        if (_interop is null || !_ready) return;
+        await _interop.UpdateOptionsAsync(_mapId, MapsSerializer.Serialize(options), redrawGeometry);
+        // The live map is now ahead of what this component last sent, so the next parameter change
+        // is compared against a merge it cannot reconstruct. Clearing the record makes that change
+        // a full update rather than a wrong diff.
+        _sentOptionsJson = null;
+    }
+
+    /// <summary>Replaces the series, tweening fills and radii rather than rebuilding the DOM.</summary>
+    public async Task UpdateSeriesAsync(IEnumerable<MapSeries> series)
+    {
+        if (_interop is null || !_ready) return;
+        var json = MapsSerializer.Serialize(series.ToList());
+        _sentOptionsJson = null;
+        await _interop.UpdateSeriesAsync(_mapId, json);
+    }
+
+    /// <summary>Drills into a feature by key, as a click on it would.</summary>
+    public async Task<bool> DrillToAsync(string key)
+        => _interop is not null && _ready && await _interop.DrillToAsync(_mapId, key);
+
+    /// <summary>Climbs out of a drilldown level. Pass <c>int.MaxValue</c> to return to the top.</summary>
+    public async Task<bool> DrillUpAsync(int levels = 1)
+        => _interop is not null && _ready && await _interop.DrillUpAsync(_mapId, levels);
+
+    /// <summary>How deep the map currently is. 0 is the top.</summary>
+    public async Task<int> GetDrillDepthAsync()
+        => _interop is null || !_ready ? 0 : await _interop.DrillDepthAsync(_mapId);
+
+    /// <summary>Selects a feature, or deselects it when it is already selected.</summary>
+    public async Task ToggleSelectionAsync(string key)
+    {
+        if (_interop is not null && _ready) await _interop.ToggleSelectionAsync(_mapId, key);
+    }
+
+    /// <summary>Replaces the selection.</summary>
+    public async Task SetSelectionAsync(params string[] keys)
+    {
+        if (_interop is not null && _ready)
+            await _interop.SetSelectionAsync(_mapId, MapsSerializer.Serialize(keys));
+    }
+
+    /// <summary>Clears the selection.</summary>
+    public async Task ClearSelectionAsync()
+    {
+        if (_interop is not null && _ready) await _interop.ClearSelectionAsync(_mapId);
+    }
+
+    /// <summary>
+    /// Flies to a target along a zoom-and-pan path, deriving its duration from the distance. On a
+    /// globe the sphere turns instead, and the turn and the zoom land together.
+    /// </summary>
+    public async Task FlyToAsync(CameraTarget target)
+    {
+        if (_interop is not null && _ready)
+            await _interop.FlyToAsync(_mapId, MapsSerializer.Serialize(target));
+    }
+
+    /// <summary>Moves to a target with a fixed duration: for short, mechanical moves.</summary>
+    public async Task EaseToAsync(CameraTarget target)
+    {
+        if (_interop is not null && _ready)
+            await _interop.EaseToAsync(_mapId, MapsSerializer.Serialize(target));
+    }
+
+    /// <summary>Moves to a target with no animation.</summary>
+    public async Task JumpToAsync(CameraTarget target)
+    {
+        if (_interop is not null && _ready)
+            await _interop.JumpToAsync(_mapId, MapsSerializer.Serialize(target));
+    }
+
+    /// <summary>Frames one feature by key.</summary>
+    public async Task FrameFeatureAsync(string key, FrameOptions? options = null)
+    {
+        if (_interop is not null && _ready)
+            await _interop.FrameFeatureAsync(_mapId, key, options is null ? null : MapsSerializer.Serialize(options));
+    }
+
+    /// <summary>Returns to the opening fit, and a spun globe to the rotation it opened at.</summary>
+    public async Task ResetViewAsync(FrameOptions? options = null)
+    {
+        if (_interop is not null && _ready)
+            await _interop.ResetViewAsync(_mapId, options is null ? null : MapsSerializer.Serialize(options));
+    }
+
+    /// <summary>Steps the zoom in, as the <c>+</c> control does.</summary>
+    public async Task ZoomInAsync()
+    {
+        if (_interop is not null && _ready) await _interop.ZoomInAsync(_mapId);
+    }
+
+    /// <summary>Steps the zoom out.</summary>
+    public async Task ZoomOutAsync()
+    {
+        if (_interop is not null && _ready) await _interop.ZoomOutAsync(_mapId);
+    }
+
+    /// <summary>The camera's current scale, 1 at the opening fit.</summary>
+    public async Task<double> GetZoomAsync()
+        => _interop is null || !_ready ? 1 : await _interop.GetZoomAsync(_mapId);
+
+    /// <summary>
+    /// Turns the globe to an absolute rotation, as a drag would. Does nothing on a projection that
+    /// cannot rotate.
+    /// </summary>
+    public async Task RotateToAsync(double lambda, double phi, double gamma = 0)
+    {
+        if (_interop is not null && _ready)
+            await _interop.RotateToAsync(_mapId, MapsSerializer.Serialize(new[] { lambda, phi, gamma }));
+    }
+
+    /// <summary>The projection's rotation, <c>[lambda, phi, gamma]</c> in degrees.</summary>
+    public async Task<double[]> GetRotationAsync()
+        => _interop is null || !_ready ? [0, 0, 0] : await _interop.GetRotationAsync(_mapId);
+
+    /// <summary>
+    /// What a series' join actually matched, and what it did not, with suggestions for the rows
+    /// that missed.
+    /// </summary>
+    public async Task<JoinDiagnostics?> DiagnoseJoinAsync(int seriesIndex = 0)
+        => _interop is null || !_ready ? null : await _interop.DiagnoseJoinAsync(_mapId, seriesIndex);
+
+    /// <summary>
+    /// The resolved options tree as JSON, with functions dropped: what the map actually decided,
+    /// after defaults, pack recommendations and responsive rules.
+    /// </summary>
+    public async Task<string?> GetSpecAsync()
+        => _interop is null || !_ready ? null : await _interop.ToSpecAsync(_mapId);
+
+    /// <summary>
+    /// The current view as a standalone SVG document, with computed styles inlined so it survives
+    /// leaving the page. The legend and tooltips are HTML outside the SVG, so this is the plot.
+    /// </summary>
+    public async Task<string?> GetSvgStringAsync(MapExportOptions? options = null)
+        => _interop is null || !_ready
+            ? null
+            : await _interop.GetSvgStringAsync(_mapId, options is null ? null : MapsSerializer.Serialize(options));
+
+    /// <summary>Downloads the current view as an SVG file.</summary>
+    public async Task ExportSvgAsync(MapExportOptions? options = null)
+    {
+        if (_interop is not null && _ready)
+            await _interop.ExportSvgAsync(_mapId, options is null ? null : MapsSerializer.Serialize(options));
+    }
+
+    /// <summary>Downloads the current view as a PNG file.</summary>
+    public async Task ExportPngAsync(MapExportOptions? options = null)
+    {
+        if (_interop is not null && _ready)
+            await _interop.ExportPngAsync(_mapId, options is null ? null : MapsSerializer.Serialize(options));
+    }
+
+    /// <summary>The current view as a PNG data URI, for embedding rather than downloading.</summary>
+    public async Task<string?> GetDataUriAsync(MapExportOptions? options = null)
+        => _interop is null || !_ready
+            ? null
+            : await _interop.DataUriAsync(_mapId, options is null ? null : MapsSerializer.Serialize(options));
+
+    // --- JS -> .NET event bridge --------------------------------------------
+    [JSInvokable] public Task HandleRendered(object? _) => Invoke(OnRendered);
+    [JSInvokable] public Task HandleUpdated(object? _) => Invoke(OnUpdated);
+    [JSInvokable] public Task HandleResized(ResizeEventArgs a) => Invoke(OnResized, a);
+    [JSInvokable] public Task HandleFeatureClick(FeatureEventArgs a) => Invoke(OnFeatureClick, a);
+    [JSInvokable] public Task HandleFeatureHover(FeatureEventArgs a) => Invoke(OnFeatureHover, a);
+    [JSInvokable] public Task HandleFeatureFocus(FeatureEventArgs a) => Invoke(OnFeatureFocus, a);
+    [JSInvokable] public Task HandleMarkClick(FeatureEventArgs a) => Invoke(OnMarkClick, a);
+    [JSInvokable] public Task HandleMarkHover(FeatureEventArgs a) => Invoke(OnMarkHover, a);
+    [JSInvokable] public Task HandleClusterClick(FeatureEventArgs a) => Invoke(OnClusterClick, a);
+    [JSInvokable] public Task HandleDrilldown(DrilldownEventArgs a) => Invoke(OnDrilldown, a);
+    [JSInvokable] public Task HandleDrillup(DrillupEventArgs a) => Invoke(OnDrillup, a);
+    [JSInvokable] public Task HandleSelectionChange(SelectionChangeEventArgs a) => Invoke(OnSelectionChange, a);
+    [JSInvokable] public Task HandleLegendToggle(LegendToggleEventArgs a) => Invoke(OnLegendToggle, a);
+    [JSInvokable] public Task HandleZoom(ZoomEventArgs a) => Invoke(OnZoom, a);
+    [JSInvokable] public Task HandlePanEnd() => Invoke(OnPanEnd);
+    [JSInvokable] public Task HandleRotate(RotateEventArgs a) => Invoke(OnRotate, a);
+    [JSInvokable] public Task HandleRotateEnd(RotateEventArgs a) => Invoke(OnRotateEnd, a);
+
+    private static Task Invoke<T>(EventCallback<T> callback, T args)
+        => callback.HasDelegate ? callback.InvokeAsync(args) : Task.CompletedTask;
+
+    private static Task Invoke(EventCallback callback)
+        => callback.HasDelegate ? callback.InvokeAsync() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_interop is not null)
+        {
+            // _ready rather than _rendered, so a map disposed while its geometry was still loading
+            // is torn down too rather than left in the browser's instance table.
+            if (_ready)
+            {
+                try { await _interop.DestroyAsync(_mapId); }
+                catch (JSDisconnectedException) { /* circuit already gone */ }
+            }
+            await _interop.DisposeAsync();
+        }
+        _dotNetRef?.Dispose();
+    }
+}

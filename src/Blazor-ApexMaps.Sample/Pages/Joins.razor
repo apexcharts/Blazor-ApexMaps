@@ -1,0 +1,133 @@
+@page "/joins"
+
+<PageTitle>Join diagnostics - Blazor-ApexMaps</PageTitle>
+
+<h1>Join diagnostics</h1>
+
+<p class="lead">
+    Around nine in ten real map failures are join failures, and every library renders them as
+    silent grey. This one says what happened.
+</p>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="fuzzy" checked="@_fuzzy"
+               @onchange="e => Set(() => _fuzzy = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="fuzzy">Fuzzy join</label>
+    </div>
+    <button class="btn btn-sm btn-outline-primary" @onclick="Diagnose">Diagnose the join</button>
+</div>
+
+<div class="demo-card">
+    <ApexMaps @ref="_map" Options="_options" Height="440" OnRendered="Diagnose" />
+</div>
+
+@if (_diagnostics is not null)
+{
+    <div class="diagnostics">
+        <p>
+            <strong>@_diagnostics.Matched of @_diagnostics.TotalData rows</strong> matched
+            @_diagnostics.TotalFeatures features, on geometry key
+            <code>@_diagnostics.GeoKeyField</code> and data key <code>@_diagnostics.DataKeyField</code>.
+        </p>
+
+        @if (_diagnostics.UnmatchedData.Count > 0)
+        {
+            <p>Rows that matched nothing:</p>
+            <ul>
+                @foreach (var row in _diagnostics.UnmatchedData)
+                {
+                    <li>
+                        <code>@row.Key</code>
+                        @if (row.Suggestions.Count > 0)
+                        {
+                            <span> - did you mean <code>@row.Suggestions[0].Name</code>? (@row.Suggestions[0].Reason, @row.Suggestions[0].Score.ToString("0.00"))</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_diagnostics.Applied.Count > 0)
+        {
+            <p>Substitutions applied:</p>
+            <ul>
+                @foreach (var applied in _diagnostics.Applied)
+                {
+                    <li><code>@applied</code></li>
+                }
+            </ul>
+        }
+
+        @if (_diagnostics.SharedKeys.Count > 0)
+        {
+            <p>Keys held by more than one feature:</p>
+            <ul>
+                @foreach (var shared in _diagnostics.SharedKeys.Take(5))
+                {
+                    <li><code>@shared.Key</code> - @shared.Count features: @string.Join(", ", shared.Names)</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+<p class="text-muted small">
+    The rows here are keyed by country name, spelled the way a spreadsheet spells them: "United
+    States", "Ivory Coast", "South Korea", "Czech Republic". Natural Earth calls those "United
+    States of America", "Côte d'Ivoire", "South Korea" and "Czechia", so four rows miss. Matching
+    stays exact by default, because silently guessing turns an obvious failure into a plausible
+    wrong answer. <code>FuzzyJoin</code> applies the suggestions and reports every substitution it
+    made, so the convenience stays auditable.
+</p>
+
+@code {
+    private ApexMaps? _map;
+    private bool _fuzzy;
+    private JoinDiagnostics? _diagnostics;
+
+    private MapsOptions _options = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    private async Task Diagnose()
+    {
+        if (_map is null) return;
+        _diagnostics = await _map.DiagnoseJoinAsync();
+        StateHasChanged();
+    }
+
+    private void Rebuild()
+    {
+        _diagnostics = null;
+        _options = new MapsOptions
+        {
+            Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = "Renewable electricity (%)",
+                    JoinBy = "name",
+                    Data = SampleData.RenewablesByName,
+                    FuzzyJoin = _fuzzy,
+                    Scale = new ScaleOptions { Palette = Palettes.Blues },
+                },
+            ],
+            Legend = new LegendOptions { Position = LegendPosition.Bottom },
+            Debug = new DebugOptions { Enabled = AutoBool.True, JoinDiagnostics = true },
+        };
+    }
+
+    // The map re-renders when the options change, so re-diagnose once it has.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && _diagnostics is null && _map is { IsRendered: true }) await Diagnose();
+    }
+}

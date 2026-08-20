@@ -1,0 +1,77 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch tags for version info
+
+      - name: get latest version
+        id: version
+        run: |
+          # get latest tag, default to v0.0.0 if none exists
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # remove 'v' prefix for dotnet version
+          VERSION=${LATEST_TAG#v}
+
+          # ensure version is valid (handle edge cases)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "v0.0.0" ]; then
+            VERSION="0.0.0"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Deploying version: $LATEST_TAG (dotnet version: $VERSION)"
+
+      - name: setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: publish blazor app
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Publishing with version: $VERSION"
+          dotnet publish src/Blazor-ApexMaps.Sample/Blazor-ApexMaps.Sample.csproj \
+            -c Release \
+            -o publish \
+            /p:Version="$VERSION"
+
+      - name: Change base href in index.html
+        run: |
+          # update base href for github pages subdirectory
+          sed -i 's/<base href="\/" \/>/<base href="\/Blazor-ApexMaps\/" \/>/g' publish/wwwroot/index.html
+
+      - name: Add .nojekyll file
+        run: touch publish/wwwroot/.nojekyll
+
+      - name: upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "publish/wwwroot"
+
+      - name: deploy to github pages
+        id: deployment
+        uses: actions/deploy-pages@v4

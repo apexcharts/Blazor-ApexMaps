@@ -1,0 +1,149 @@
+@page "/camera"
+
+<PageTitle>Camera &amp; export - Blazor-ApexMaps</PageTitle>
+
+<h1>Camera &amp; export</h1>
+
+<p class="lead">
+    Every move is interruptible and retargetable: click two of these in a row and the second takes
+    over from wherever the first had got to.
+</p>
+
+<div class="demo-toolbar">
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => FlyTo(2.35, 48.85, 6)">Fly to Paris</button>
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => FlyTo(139.69, 35.69, 5)">Fly to Tokyo</button>
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => FlyTo(-46.63, -23.55, 5)">Fly to São Paulo</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="FrameBrazil">Frame Brazil</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Ease">Ease to India</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Jump">Jump to Kenya</button>
+</div>
+
+<div class="demo-toolbar">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="ZoomIn">Zoom in</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="ZoomOut">Zoom out</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">Reset view</button>
+    <span class="text-muted small">zoom: @_zoom.ToString("0.##")</span>
+</div>
+
+<div class="demo-card">
+    <ApexMaps @ref="_map" Options="_options" Height="480" OnZoom="e => _zoom = e.K" />
+</div>
+
+<h2 class="h5 mt-4">Export</h2>
+
+<div class="demo-toolbar">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="DownloadPng">Download PNG</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="DownloadSvg">Download SVG</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Preview">Preview as a data URI</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="ShowSpec">Read the resolved spec</button>
+</div>
+
+@if (_preview is not null)
+{
+    <p><img class="export-preview" src="@_preview" alt="Exported map" /></p>
+}
+
+@if (_spec is not null)
+{
+    <pre class="code-block"><code>@_spec</code></pre>
+}
+
+<p class="text-muted small">
+    An export inlines computed styles, so dark mode, custom properties and everything else the
+    stylesheet decided survive leaving the page. The legend and tooltips are HTML outside the SVG,
+    so what leaves is the plot. <code>GetSpecAsync</code> returns the resolved options tree, which
+    is what the map actually decided after defaults, pack recommendations and responsive rules: it
+    is JSON, so it round-trips into a saved dashboard.
+</p>
+
+@code {
+    private ApexMaps? _map;
+    private double _zoom = 1;
+    private string? _preview;
+    private string? _spec;
+
+    private readonly MapsOptions _options = new()
+    {
+        Geo = new GeoOptions { Map = GeoMaps.WorldCountries110m, Graticule = new GraticuleOptions { Show = true } },
+        Series =
+        [
+            new ChoroplethSeries
+            {
+                Name = "Renewable electricity (%)",
+                JoinBy = JoinSpec.Between("iso_a3", "code"),
+                Data = SampleData.Renewables,
+                Scale = new ScaleOptions { Palette = Palettes.Viridis },
+            },
+        ],
+        Legend = new LegendOptions { Position = LegendPosition.Bottom, Style = LegendStyle.Gradient },
+    };
+
+    private async Task FlyTo(double lon, double lat, double zoom)
+    {
+        if (_map is not null)
+            await _map.FlyToAsync(new CameraTarget { Center = new LonLat(lon, lat), Zoom = zoom });
+    }
+
+    private Task FrameBrazil() => Frame("BRA");
+
+    private async Task Frame(string key)
+    {
+        if (_map is not null)
+            await _map.FrameFeatureAsync(key, new FrameOptions { Padding = 40 });
+    }
+
+    private async Task Ease()
+    {
+        if (_map is not null)
+            await _map.EaseToAsync(new CameraTarget { Center = new LonLat(78.96, 20.59), Zoom = 4, Duration = 600 });
+    }
+
+    private async Task Jump()
+    {
+        if (_map is not null)
+            await _map.JumpToAsync(new CameraTarget { Center = new LonLat(37.9, 0.02), Zoom = 6 });
+    }
+
+    private async Task ZoomIn()
+    {
+        if (_map is not null) await _map.ZoomInAsync();
+    }
+
+    private async Task ZoomOut()
+    {
+        if (_map is not null) await _map.ZoomOutAsync();
+    }
+
+    private async Task Reset()
+    {
+        if (_map is not null) await _map.ResetViewAsync();
+    }
+
+    private async Task DownloadPng()
+    {
+        if (_map is not null) await _map.ExportPngAsync(new MapExportOptions { Scale = 2, Filename = "renewables" });
+    }
+
+    private async Task DownloadSvg()
+    {
+        if (_map is not null) await _map.ExportSvgAsync(new MapExportOptions { Filename = "renewables" });
+    }
+
+    private async Task Preview()
+    {
+        if (_map is null) return;
+        _preview = await _map.GetDataUriAsync(new MapExportOptions { Scale = 1 });
+    }
+
+    private async Task ShowSpec()
+    {
+        if (_map is null) return;
+        var spec = await _map.GetSpecAsync();
+        // Reformat it, because what comes back is one line.
+        _spec = spec is null
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(
+                System.Text.Json.JsonDocument.Parse(spec),
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+}
