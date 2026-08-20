@@ -26,11 +26,16 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <!--
+      Versioned with the core rather than independently, as react-apexmaps, vue-apexmaps and
+      ngx-apexmaps are: apexmaps is phase 1, so a wrapper's version saying which core it speaks for
+      is worth more than a 1.0.0 that would imply a settled option surface.
+    -->
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <FileVersion>0.3.0.0</FileVersion>
     <PackageReleaseNotes>
-      1.0.0 Initial release. Wraps apexmaps 0.3.0: choropleth, bubble, marker, arc and line series;
+      0.3.0 Initial release. Wraps apexmaps 0.3.0: choropleth, bubble, marker, arc and line series;
       13 projections with spec objects; the built-in geometry registry (26 packs, fetched on demand);
       scales, palettes, pattern and image fills; legend, tooltip, data labels and editorial annotations;
       zoom, pan, globe rotation, box selection, linked selection and drilldown; the camera API

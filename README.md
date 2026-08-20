@@ -33,6 +33,11 @@ configuration: the defaults are meant to be publishable.
 
 **[Live demos](https://apexcharts.github.io/Blazor-ApexMaps/)** - one page per feature.
 
+> **Versioning.** This package tracks the core's version, as `react-apexmaps`, `vue-apexmaps` and
+> `ngx-apexmaps` do, so `0.3.0` here speaks for `apexmaps@0.3.0`. The core is phase 1: the engine,
+> the five series, the registry and everything in the table below are working and tested, and the
+> option surface may still move before 1.0.
+
 ## What you get
 
 | Area | Detail |
