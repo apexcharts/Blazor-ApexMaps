@@ -34,15 +34,15 @@ configuration: the defaults are meant to be publishable.
 **[Live demos](https://apexcharts.github.io/Blazor-ApexMaps/)** - one page per feature.
 
 > **Versioning.** This package tracks the core's version, as `react-apexmaps`, `vue-apexmaps` and
-> `ngx-apexmaps` do, so `0.3.0` here speaks for `apexmaps@0.3.0`. The core is phase 1: the engine,
-> the five series, the registry and everything in the table below are working and tested, and the
+> `ngx-apexmaps` do, so `0.4.0` here speaks for `apexmaps@0.4.0`. The core is phase 1: the engine,
+> the six series, the registry and everything in the table below are working and tested, and the
 > option surface may still move before 1.0.
 
 ## What you get
 
 | Area | Detail |
 | --- | --- |
-| Series | `ChoroplethSeries`, `BubbleSeries` (proportional symbols), `MarkerSeries` (seven shapes, categorical colour, clustering †), `ArcSeries` (great circles with travelling flow beads) †, `LineSeries` (routes through given vertices) †, plus an automatic basemap when no feature series is present |
+| Series | `ChoroplethSeries`, `BubbleSeries` (proportional symbols), `MarkerSeries` (seven shapes, categorical colour, clustering †), `ArcSeries` (great circles with travelling flow beads) †, `LineSeries` (routes through given vertices) †, `HexbinSeries` (points binned into a hexagonal lattice) †, plus an automatic basemap when no feature series is present |
 | Geometry | 26 built-in packs named through `GeoMaps`: world countries and coastline, US states and all 3,231 counties, EU NUTS 0-3, and admin-1 for 15 more countries. Lazy, one request per pack, provenance and attribution attached |
 | Projections | 13 projections with aliases through `Projections`, spec objects with rotation, centre, standard parallels and clip angle, and a globe that spins under the drag |
 | Data | Your own models, records, anonymous types or dictionaries. Join-key auto-detection, mismatch diagnostics with suggestions through `DiagnoseJoinAsync`, opt-in fuzzy matching |
@@ -220,8 +220,8 @@ licensed.**
 | Joins, fuzzy matching, and the join diagnostics | Linked selection across maps (`Link`) |
 | Scales, palettes, size legends, responsive rules | Story mode (`ChartContext.Story`) |
 | Flat fills, in every scale and palette | Pattern fills and image fills |
-| PNG and SVG export | |
-| The accessibility layer | |
+| PNG and SVG export | Hexbin series (`HexbinSeries`) |
+| The accessibility layer | Hex tile maps (`GeoOptions.Layout`) |
 
 Without a valid key the licensed features **still work, in full, with a watermark on the map**, so
 you can evaluate them in your own app with your own data. A valid key removes the watermark, without

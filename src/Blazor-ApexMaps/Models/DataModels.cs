@@ -9,6 +9,43 @@ namespace Blazor_ApexMaps.Models;
 // keeps an extension bag, so extra columns survive to tooltips, labels and accessors.
 
 /// <summary>
+/// A point to be binned. Position only, plus whatever the aggregate reads.
+/// </summary>
+/// <remarks>
+/// There is no join key here, unlike <see cref="BubbleDatum"/>. A hexbin over region centroids
+/// bins the <em>geometry</em>, so the answer is decided by how the regions were drawn rather than
+/// by where anything happened, and it changes if the map does. Points are the input; a caller who
+/// has regions wants a choropleth.
+/// </remarks>
+public class HexbinDatum
+{
+    /// <summary>Longitude in degrees.</summary>
+    public double? Lon { get; set; }
+
+    /// <summary>Latitude in degrees.</summary>
+    public double? Lat { get; set; }
+
+    /// <summary>Longitude, for data that came from a <c>[lat, lng]</c> world.</summary>
+    public double? Lng { get; set; }
+
+    /// <summary><c>[lon, lat]</c>, for data that arrived as GeoJSON.</summary>
+    public LonLat? Coordinates { get; set; }
+
+    /// <summary>
+    /// The value the aggregate reads. Not needed when the aggregate is
+    /// <see cref="HexbinAggregate.Count"/>.
+    /// </summary>
+    public double? Value { get; set; }
+
+    /// <summary>Display name, used in tooltips and labels.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Anything else on the row: a second encoding, tooltip material.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? Extra { get; set; }
+}
+
+/// <summary>
 /// A bubble row: an explicit position, or a join key resolved to a feature's centroid.
 /// </summary>
 public class BubbleDatum

@@ -215,4 +215,68 @@ public static class SampleData
             ],
         },
     ];
+
+    /// <summary>
+    /// Metro centres used to seed the hexbin demo: a name, a position, and roughly how many
+    /// readings to scatter around it.
+    /// </summary>
+    private static readonly (string Name, double Lon, double Lat, int Count)[] HexbinSeeds =
+    [
+        ("New York", -74.01, 40.71, 1400), ("Los Angeles", -118.24, 34.05, 1100),
+        ("Chicago", -87.63, 41.88, 700),   ("Houston", -95.37, 29.76, 620),
+        ("Phoenix", -112.07, 33.45, 480),  ("Philadelphia", -75.17, 39.95, 460),
+        ("San Antonio", -98.49, 29.42, 320), ("San Diego", -117.16, 32.72, 380),
+        ("Dallas", -96.80, 32.78, 640),    ("San Jose", -121.89, 37.34, 340),
+        ("Austin", -97.74, 30.27, 300),    ("Jacksonville", -81.66, 30.33, 220),
+        ("Seattle", -122.33, 47.61, 520),  ("Denver", -104.99, 39.74, 400),
+        ("Boston", -71.06, 42.36, 560),    ("Atlanta", -84.39, 33.75, 480),
+        ("Miami", -80.19, 25.76, 440),     ("Minneapolis", -93.27, 44.98, 300),
+        ("Detroit", -83.05, 42.33, 280),   ("Portland", -122.68, 45.52, 260),
+    ];
+
+    /// <summary>
+    /// Roughly 10,000 readings scattered around US metro centres: far more points than a bubble
+    /// series could draw without becoming a smear, which is the case a hexbin exists for.
+    /// </summary>
+    /// <remarks>
+    /// Generated, not observed, and deliberately so: the point of the demo is the lattice, and a
+    /// real dataset this size would not be readable in the source. The seed is fixed, so the map
+    /// is identical on every run and across every visitor.
+    /// </remarks>
+    public static readonly HexbinDatum[] StormReports = BuildStormReports();
+
+    private static HexbinDatum[] BuildStormReports()
+    {
+        // Fixed seed: a demo that redraws differently on each load makes a screenshot useless and
+        // an eyeball comparison between two builds impossible.
+        var random = new Random(20260922);
+        var points = new List<HexbinDatum>(10_000);
+
+        foreach (var (name, lon, lat, count) in HexbinSeeds)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                // Box-Muller, so the scatter falls off from the centre the way a real catchment
+                // does rather than filling a square evenly.
+                var (dLon, dLat) = NextGaussianPair(random);
+                points.Add(new HexbinDatum
+                {
+                    Lon = lon + dLon * 1.15,
+                    Lat = lat + dLat * 0.75,
+                    Value = Math.Round(20 + random.NextDouble() * 80, 1),
+                    Name = name,
+                });
+            }
+        }
+
+        return [.. points];
+    }
+
+    private static (double, double) NextGaussianPair(Random random)
+    {
+        var u1 = 1.0 - random.NextDouble();
+        var u2 = 1.0 - random.NextDouble();
+        var magnitude = Math.Sqrt(-2.0 * Math.Log(u1));
+        return (magnitude * Math.Cos(2.0 * Math.PI * u2), magnitude * Math.Sin(2.0 * Math.PI * u2));
+    }
 }

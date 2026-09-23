@@ -31,10 +31,16 @@
       ngx-apexmaps are: apexmaps is phase 1, so a wrapper's version saying which core it speaks for
       is worth more than a 1.0.0 that would imply a settled option surface.
     -->
-    <Version>0.3.0</Version>
-    <AssemblyVersion>0.3.0.0</AssemblyVersion>
-    <FileVersion>0.3.0.0</FileVersion>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
     <PackageReleaseNotes>
+      0.4.0 Tracks apexmaps 0.4.0. Adds the hexbin series (HexbinSeries, HexbinDatum), which bins
+      points into a hexagonal lattice sized in screen pixels and colours each cell by count, sum,
+      mean, min or max. Adds GeoOptions.Layout, which draws a region set as a hex tile map instead
+      of its real boundaries and morphs between the two when it is toggled. Both are licensed
+      features: they work without a key for evaluation, with a watermark.
+
       0.3.0 Initial release. Wraps apexmaps 0.3.0: choropleth, bubble, marker, arc and line series;
       13 projections with spec objects; the built-in geometry registry (26 packs, fetched on demand);
       scales, palettes, pattern and image fills; legend, tooltip, data labels and editorial annotations;

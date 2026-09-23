@@ -34,6 +34,10 @@ const ROUTES = [
   { route: "projections", marks: ".apexmaps-feature" },
   { route: "points", marks: ".apexmaps-bubble, .apexmaps-mark" },
   { route: "routes", marks: ".apexmaps-arc, .apexmaps-line" },
+  // Hexbin cells are `.apexmaps-bin`: they are drawn from a world-space lattice rather than from
+  // geometry, so they are not `.apexmaps-feature`. The page also carries the hex-layout
+  // choropleth, whose cells ARE features, hence the pair.
+  { route: "density", marks: ".apexmaps-bin, .apexmaps-feature" },
   { route: "drilldown", marks: ".apexmaps-feature" },
   { route: "selection", marks: ".apexmaps-feature" },
   { route: "camera", marks: ".apexmaps-feature" },

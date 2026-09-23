@@ -1,0 +1,185 @@
+@page "/density"
+
+<PageTitle>Hexbins &amp; hex tile maps - Blazor-ApexMaps</PageTitle>
+
+<h1>Hexbins &amp; hex tile maps</h1>
+
+<p class="lead">
+    Two answers to the same problem: a map whose real shape gets in the way of its data. One bins
+    the points, the other replaces the regions.
+</p>
+
+<h2 class="h5 mt-4">Hexbin: more points than pixels</h2>
+
+<div class="demo-toolbar">
+    <label>
+        Aggregate
+        <select class="form-select form-select-sm" value="@_aggregate"
+                @onchange="e => Set(() => _aggregate = Enum.Parse<HexbinAggregate>(e.Value?.ToString() ?? nameof(HexbinAggregate.Count)))">
+            @foreach (var aggregate in Enum.GetValues<HexbinAggregate>())
+            {
+                <option value="@aggregate">@aggregate</option>
+            }
+        </select>
+    </label>
+    <label>
+        Radius
+        <select class="form-select form-select-sm" value="@_radius" @onchange="SetRadius">
+            <option value="8">8 px</option>
+            <option value="14">14 px (default)</option>
+            <option value="22">22 px</option>
+        </select>
+    </label>
+    <label>
+        Orientation
+        <select class="form-select form-select-sm" value="@_orientation"
+                @onchange="e => Set(() => _orientation = Enum.Parse<HexbinOrientation>(e.Value?.ToString() ?? nameof(HexbinOrientation.Pointy)))">
+            <option value="@HexbinOrientation.Pointy">Pointy (default)</option>
+            <option value="@HexbinOrientation.Flat">Flat</option>
+        </select>
+    </label>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="gap" checked="@_gap"
+               @onchange="e => Set(() => _gap = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="gap">Gap between cells</label>
+    </div>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_hexbinOptions" Height="520" />
+</div>
+
+<p class="text-muted small">
+    @SampleData.StormReports.Length.ToString("N0") generated readings around twenty US metros. A
+    bubble series at this count is a smear; the lattice is a count you can read. The radius is in
+    <em>screen</em> pixels, not world units, so the cells stay the size you chose as you zoom and
+    the lattice refines instead of magnifying. That also means the class breaks move when you cross
+    a zoom level: the same colour stands for fewer points per cell once the cells are smaller. Pin
+    a domain if two maps have to be compared. <code>Count</code> is the default and needs no value
+    field, which is the honest answer to "where are these things".
+</p>
+
+<h2 class="h5 mt-5">Hex tile map: every region the same size</h2>
+
+<div class="demo-toolbar">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="layout" checked="@_hexLayout"
+               @onchange="e => Set(() => _hexLayout = (bool?)e.Value ?? false)" />
+        <label class="form-check-label" for="layout">Hex layout</label>
+    </div>
+</div>
+
+<div class="demo-card">
+    <ApexMaps Options="_layoutOptions" Height="520" />
+</div>
+
+<p class="text-muted small">
+    The same choropleth, the same rows, one option. Toggle it and each state walks to its cell
+    rather than the map being swapped, which is how a reader learns which cell is which. A
+    cartogram is a deliberate choice, not a default: it is right when the story is about people or
+    money and land area actively misleads, and when small states have to stay legible. It is wrong
+    when a reader needs to navigate by geography. The layout downloads independently of the
+    boundaries and is roughly fifty times smaller, so this form does not fetch geometry it never
+    draws.
+</p>
+
+<p class="text-muted small">
+    Both are licensed features. Without a key they work in full, with a watermark, so you can
+    evaluate them on your own data.
+</p>
+
+@code {
+    private HexbinAggregate _aggregate = HexbinAggregate.Count;
+    private double _radius = 14;
+    private HexbinOrientation _orientation = HexbinOrientation.Pointy;
+    private bool _gap = true;
+    private bool _hexLayout = true;
+
+    private MapsOptions _hexbinOptions = null!;
+    private MapsOptions _layoutOptions = null!;
+
+    protected override void OnInitialized() => Rebuild();
+
+    private void Set(Action change)
+    {
+        change();
+        Rebuild();
+    }
+
+    // A method rather than an inline lambda: the parse needs a string literal for the fallback,
+    // and a nested double quote ends the Razor attribute.
+    private void SetRadius(ChangeEventArgs e) =>
+        Set(() => _radius = double.TryParse(e.Value?.ToString(), out var radius) ? radius : 14);
+
+    private void Rebuild()
+    {
+        _hexbinOptions = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.UsStates,
+                View = new ViewOptions { Fit = new GeoBounds(-125, 24, -66, 50), Padding = 16 },
+            },
+            Series =
+            [
+                new HexbinSeries
+                {
+                    Name = "Readings",
+                    Data = SampleData.StormReports,
+                    Aggregate = _aggregate,
+                    Radius = _radius,
+                    Orientation = _orientation,
+                    Gap = _gap ? 0.12 : 0,
+                    MinCount = 1,
+                    Scale = new ScaleOptions { Palette = Palettes.Viridis, Classes = 6 },
+                },
+            ],
+            Legend = new LegendOptions
+            {
+                Position = LegendPosition.Bottom,
+                Title = _aggregate == HexbinAggregate.Count ? "Readings per cell" : $"{_aggregate} of reading",
+            },
+            Tooltip = new TooltipOptions
+            {
+                Formatter = JsFunction.From("ctx => `<b>${ctx.value ?? 0}</b> in this cell`"),
+            },
+        };
+
+        _layoutOptions = new MapsOptions
+        {
+            Geo = new GeoOptions
+            {
+                Map = GeoMaps.UsStates,
+                Layout = _hexLayout ? MapLayout.Hex : null,
+            },
+            Series =
+            [
+                new ChoroplethSeries
+                {
+                    Name = "Broadband adoption (%)",
+                    // us/states joins on `abbr`, which is the key that pack recommends.
+                    JoinBy = "abbr",
+                    Data = SampleData.Broadband,
+                    Scale = new ScaleOptions { Palette = Palettes.Blues, Classes = 5 },
+                },
+            ],
+            // Chart-level data labels rather than the series' own: a hex tile map that does not
+            // name its cells is unreadable, because the whole point is that the shapes no longer
+            // tell you where you are. Every cell is the same size, so there is no small-feature
+            // case to skip and no collisions to resolve.
+            DataLabels = new DataLabelOptions
+            {
+                Enabled = true,
+                Field = "abbr",
+                Collision = LabelCollision.Hide,
+                MinFeatureArea = 0,
+                Style = new DataLabelStyle { FontSize = 11, FontWeight = 600 },
+            },
+            Legend = new LegendOptions { Position = LegendPosition.Bottom },
+            Tooltip = new TooltipOptions
+            {
+                Formatter = JsFunction.From("ctx => `<b>${ctx.name}</b><br>${ctx.value ?? '-'}%`"),
+            },
+        };
+    }
+}

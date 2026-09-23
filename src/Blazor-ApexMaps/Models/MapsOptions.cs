@@ -161,6 +161,35 @@ public class GeoOptions
     /// </summary>
     public MapSource? Map { get; set; }
 
+    /// <summary>
+    /// Draw the region set as a grid of equal cells instead of its real boundaries: a hex tile
+    /// map, also called a honeycomb or tilegram. <c>Map = "us", Layout = MapLayout.Hex</c> gives
+    /// one hexagon per state, and naming the layout id directly (<c>"us/states@hex"</c>) is the
+    /// same thing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A cartogram, not geography. Reach for it when the story is about people, votes or money and
+    /// land area is actively misleading, or when every unit has to be legible including the ones
+    /// too small to see on a real map. The cost is that a reader who does not already know the
+    /// country cannot navigate it, so it is a poor default and a strong deliberate choice.
+    /// </para>
+    /// <para>
+    /// The layout resolves independently of the boundaries and is roughly fifty times smaller, so
+    /// this form does not download geometry it never draws. Layouts exist for a subset of the
+    /// packs, and an unavailable one is an error rather than a silent fall back to real
+    /// boundaries, which would look like the option had been ignored.
+    /// </para>
+    /// <para>
+    /// Turning it on or off through an options update <em>morphs</em> between the two region by
+    /// region rather than swapping them, which is how a reader learns which cell is which. It runs
+    /// off the chart's animation settings, so disabling those disables this too, and it stands
+    /// down on its own above the motion budget.
+    /// </para>
+    /// <para>Licensed feature: it works without a key for evaluation, with a watermark.</para>
+    /// </remarks>
+    public MapLayout? Layout { get; set; }
+
     /// <summary>Which object to read, when a TopoJSON topology holds several.</summary>
     public string? Object { get; set; }
 

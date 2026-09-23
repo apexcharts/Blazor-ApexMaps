@@ -112,7 +112,7 @@ public enum SizeScaleType
     Log,
 }
 
-/// <summary>Which of the five series types a series is.</summary>
+/// <summary>Which of the six series types a series is.</summary>
 public enum SeriesType
 {
     /// <summary>Areas coloured by value.</summary>
@@ -129,6 +129,50 @@ public enum SeriesType
 
     /// <summary>Routes through the vertices they are given.</summary>
     Line,
+
+    /// <summary>Points binned into a hexagonal lattice, coloured by what landed in each cell.</summary>
+    Hexbin,
+}
+
+/// <summary>What a hexbin cell's colour reports about the points that landed in it.</summary>
+public enum HexbinAggregate
+{
+    /// <summary>How many points landed in the cell. Needs no value field.</summary>
+    Count,
+
+    /// <summary>The total of the cell's values.</summary>
+    Sum,
+
+    /// <summary>The average of the cell's values.</summary>
+    Mean,
+
+    /// <summary>The smallest value in the cell.</summary>
+    Min,
+
+    /// <summary>The largest value in the cell.</summary>
+    Max,
+}
+
+/// <summary>Which way a hexbin cell's vertices point.</summary>
+public enum HexbinOrientation
+{
+    /// <summary>A vertex up.</summary>
+    Pointy,
+
+    /// <summary>A vertex to the side.</summary>
+    Flat,
+}
+
+/// <summary>Draw a region set as a grid of equal cells instead of its real boundaries.</summary>
+/// <remarks>
+/// Only <see cref="Hex"/> ships as a built-in. Square grids are supported by the generator and
+/// reachable by registering a layout with <c>grid: "square"</c>, but no built-in square layout has
+/// a name yet.
+/// </remarks>
+public enum MapLayout
+{
+    /// <summary>One hexagon per region: a hex tile map, also called a honeycomb or tilegram.</summary>
+    Hex,
 }
 
 /// <summary>Built-in marker shapes, each drawn from a generated path.</summary>

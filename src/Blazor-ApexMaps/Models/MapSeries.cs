@@ -4,9 +4,9 @@ using Blazor_ApexMaps.Serialization;
 namespace Blazor_ApexMaps.Models;
 
 /// <summary>
-/// What a series has whatever its type. Use one of the five concrete types:
+/// What a series has whatever its type. Use one of the six concrete types:
 /// <see cref="ChoroplethSeries"/>, <see cref="BubbleSeries"/>, <see cref="MarkerSeries"/>,
-/// <see cref="ArcSeries"/> or <see cref="LineSeries"/>.
+/// <see cref="ArcSeries"/>, <see cref="LineSeries"/> or <see cref="HexbinSeries"/>.
 /// </summary>
 /// <remarks>
 /// The core's <c>Series</c> is a discriminated union, so the <c>type</c> key decides which other
@@ -20,6 +20,7 @@ namespace Blazor_ApexMaps.Models;
 [JsonDerivedType(typeof(MarkerSeries), "marker")]
 [JsonDerivedType(typeof(ArcSeries), "arc")]
 [JsonDerivedType(typeof(LineSeries), "line")]
+[JsonDerivedType(typeof(HexbinSeries), "hexbin")]
 public abstract class MapSeries
 {
     /// <summary>
@@ -541,4 +542,54 @@ public class FlowOptions
     /// absence of the option, so <c>Flow = false</c> is null.
     /// </summary>
     public static implicit operator FlowOptions?(bool enabled) => enabled ? new FlowOptions() : null;
+}
+
+// --- hexbin ------------------------------------------------------------------
+
+/// <summary>
+/// Points aggregated into a hexagonal lattice, each cell coloured by what landed in it. For when
+/// there are more points than pixels and a <see cref="BubbleSeries"/> would be a smear.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The lattice is sized in <em>screen</em> pixels, so cells stay the size you chose as the reader
+/// zooms and the lattice refines instead of magnifying. That is the point of binning rather than
+/// drawing the points: the resolution follows the reader.
+/// </para>
+/// <para>
+/// Because the bins are rebuilt when the reader crosses a zoom level, a scale's domain taken from
+/// the bins moves with them: the same colour means fewer points per cell when the cells are
+/// smaller. That is the honest reading of a density map, and the legend follows it. Pin the classes
+/// with a domain or explicit breaks when two maps have to be compared.
+/// </para>
+/// <para>Licensed feature: it works without a key for evaluation, with a watermark.</para>
+/// </remarks>
+public class HexbinSeries : MapSeries
+{
+    /// <summary>The points to bin. Position only; there is no join key.</summary>
+    public IEnumerable<HexbinDatum>? Data { get; set; }
+
+    /// <summary>Cell radius, centre to vertex, in screen pixels. Default 14.</summary>
+    public double? Radius { get; set; }
+
+    /// <summary>A vertex up, or a vertex to the side. Default <see cref="HexbinOrientation.Pointy"/>.</summary>
+    public HexbinOrientation? Orientation { get; set; }
+
+    /// <summary>
+    /// What the colour encodes. Default <see cref="HexbinAggregate.Count"/>, which needs no value
+    /// field and is the honest default for "where are these things".
+    /// </summary>
+    public HexbinAggregate? Aggregate { get; set; }
+
+    /// <summary>How the aggregate becomes a colour.</summary>
+    public ScaleOptions? Scale { get; set; }
+
+    /// <summary>Cells holding fewer points than this are not drawn. Default 1.</summary>
+    public int? MinCount { get; set; }
+
+    /// <summary>
+    /// Shrink each cell towards its centre, as a fraction of the radius, so the lattice reads as
+    /// cells rather than as one sheet. Default 0.
+    /// </summary>
+    public double? Gap { get; set; }
 }
